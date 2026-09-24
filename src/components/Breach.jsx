@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { Octagon, Arrow } from './Icons.jsx';
 import { CATEGORIES } from '../../shared/categories.js';
-import { attackPlan, START_LIVES } from '../lib/attack.js';
+import { attackPlan, nextVariant, storyKeyFor, START_LIVES } from '../lib/attack.js';
 
 export { START_LIVES, MISS_PENALTY, FALSE_ALARM_PENALTY } from '../lib/attack.js';
 
@@ -28,7 +28,8 @@ export function Lives({ lives, className = '' }) {
 
 /** Full-screen "you got phished" moment: the attack plays out step by step. */
 export default function Breach({ card, lives, penalty, onClose }) {
-  const plan = attackPlan(card);
+  // Pick a fresh story each time this card family comes up (rotates through them all before repeating).
+  const [plan] = useState(() => attackPlan(card, nextVariant(storyKeyFor(card))));
   const reduce = typeof window !== 'undefined' && window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
   const [shown, setShown] = useState(reduce ? plan.steps.length : 0);
   const btn = useRef(null);
@@ -68,10 +69,10 @@ export default function Breach({ card, lives, penalty, onClose }) {
         <p className="mt-1 text-sm text-red-200">Here's what happens next in a real attack like this one:</p>
 
         <ol id="breach-steps" className="mt-5 space-y-3" aria-live="polite">
-          {plan.steps.slice(0, shown).map(([time, text]) => (
-            <li key={time + text} className="fade-in flex gap-3">
-              <span className="w-16 shrink-0 pt-0.5 text-right font-mono text-xs font-bold text-red-300">{time}</span>
-              <span className="border-l-2 border-red-500/60 pl-3 text-[15px] leading-snug text-red-50">{text}</span>
+          {plan.steps.slice(0, shown).map((text, i) => (
+            <li key={text} className="fade-in flex gap-3">
+              <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-red-500/25 text-xs font-bold text-red-200">{i + 1}</span>
+              <span className="border-l-2 border-red-500/60 pl-3 pt-0.5 text-[15px] leading-snug text-red-50">{text}</span>
             </li>
           ))}
         </ol>

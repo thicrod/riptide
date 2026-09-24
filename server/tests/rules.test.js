@@ -246,13 +246,18 @@ test('"You got phished": every scam produces a tailored attack story with the re
   ];
   for (let i = 0; i < 400; i++) scams.push(generateSingle({ level: 1 + (i % 3), isPhish: true }));
   for (const card of scams) {
-    const plan = attackPlan(card);
-    assert.ok(plan.headline && plan.steps.length >= 4, card.id);
-    assert.ok(plan.tell?.quote, `${card.id}: needs a tell`);
-    assert.ok(!/undefined|null/.test(plan.headline + plan.steps.flat().join(' ')), `${card.id}: ${plan.headline}`);
+    for (let v = 0; v < 10; v++) { // every story variation must be well-formed
+      const plan = attackPlan(card, v);
+      assert.ok(plan.headline && plan.steps.length >= 4, `${card.id} v${v}`);
+      assert.ok(plan.tell?.quote, `${card.id}: needs a tell`);
+      assert.ok(plan.steps.every((s) => typeof s === 'string' && s.length > 10), `${card.id} v${v}: bad step`);
+      assert.ok(!/undefined|null/.test(plan.headline + plan.steps.join(' ')), `${card.id} v${v}: ${plan.headline}`);
+    }
   }
   const pwCard = scams.find((m) => m.type !== 'twin' && m.flags.some((f) => f.category === 'credentials') && !m.flags.some((f) => f.category === 'mfa_code'));
-  assert.match(attackPlan(pwCard).headline, /^You (signed in on \S+\.|gave them your password)/);
+  assert.match(attackPlan(pwCard, 0).headline, /^You (signed in on \S+\.|gave them your password)/);
+  // Different variants give different headlines (that's the whole point of this change).
+  assert.notEqual(attackPlan(pwCard, 0).headline, attackPlan(pwCard, 1).headline);
 });
 
 test('ISO report is filled in and links are defanged', () => {
