@@ -5,6 +5,7 @@ import { CATEGORIES } from '../../shared/categories.js';
 import MessageCard from '../components/MessageCard.jsx';
 import FlagList from '../components/FlagList.jsx';
 import SpotDiff from '../components/SpotDiff.jsx';
+import Breach, { Lives, START_LIVES, MISS_PENALTY, FALSE_ALARM_PENALTY } from '../components/Breach.jsx';
 import {
   Hook, CheckCircle, Octagon, Arrow, ArrowLeft, Trophy, Flame, Refresh, ShieldCheck, Info, Check, XIcon, Eye, LinkIcon, Mail,
 } from '../components/Icons.jsx';
@@ -69,6 +70,8 @@ export default function Train() {
   const [scores, setScores] = useState([]);
   const [name, setName] = useState('');
   const [submitted, setSubmitted] = useState(null);
+  const [lives, setLives] = useState(START_LIVES);
+  const [breach, setBreach] = useState(null);
   const drag = useRef(null);
   const feedbackRef = useRef(null);
 
@@ -83,7 +86,6 @@ export default function Train() {
     setPhase('loading');
     try {
       const { cards: c } = await api.round(loadSeen());
-      rememberSeen(c.map((card) => card.id));
       setCards(c);
       setIdx(0);
       setAnswers([]);
@@ -92,6 +94,8 @@ export default function Train() {
       setRevealed(false);
       setActiveN(null);
       setSubmitted(null);
+      setLives(START_LIVES);
+      setBreach(null);
       setPhase('play');
     } catch (e) {
       setError(e.message);
@@ -105,19 +109,28 @@ export default function Train() {
     const newStreak = correct ? streak + 1 : 0;
     const bonus = correct && newStreak >= 3 ? 50 : 0;
     const base = card.type === 'twin' ? TWIN_POINTS : LEVEL_POINTS[card.level];
-    const points = correct ? base + bonus : 0;
+    // Falling for a scam costs a life and points; a false alarm costs points (ignoring real mail has a price too).
+    const hooked = !correct && (card.type === 'twin' || card.isPhish);
+    const penalty = correct ? 0 : hooked ? MISS_PENALTY : FALSE_ALARM_PENALTY;
+    const points = correct ? base + bonus : -penalty;
+    rememberSeen([card.id]);
     setStreak(newStreak);
-    setScore((s) => s + points);
-    setAnswers((a) => [...a, { card, choice, correct, points, bonus }]);
+    setScore((s) => Math.max(0, s + points));
+    setAnswers((a) => [...a, { card, choice, correct, points, bonus, hooked, penalty }]);
     setRevealed(true);
     setDx(0);
+    if (hooked) {
+      const left = lives - 1;
+      setLives(left);
+      setBreach({ card, lives: left, penalty });
+    }
     setTimeout(() => {
       if (window.innerWidth < 1024) feedbackRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
     }, 60);
-  }, [card, revealed, streak]);
+  }, [card, revealed, streak, lives]);
 
   const next = useCallback(() => {
-    if (idx + 1 >= cards.length) {
+    if (idx + 1 >= cards.length || lives <= 0) {
       setPhase('done');
       window.scrollTo({ top: 0, behavior: 'smooth' });
       return;
@@ -126,11 +139,11 @@ export default function Train() {
     setRevealed(false);
     setActiveN(null);
     window.scrollTo({ top: 0, behavior: 'smooth' });
-  }, [idx, cards.length]);
+  }, [idx, cards.length, lives]);
 
   // Keyboard: ← legit, → phish, Enter/→ next
   useEffect(() => {
-    if (phase !== 'play') return undefined;
+    if (phase !== 'play' || breach) return undefined;
     const onKey = (e) => {
       if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
       const twin = cards[idx]?.type === 'twin';
@@ -140,7 +153,7 @@ export default function Train() {
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [phase, revealed, answer, next, cards, idx]);
+  }, [phase, revealed, answer, next, cards, idx, breach]);
 
   // Swipe (touch or mouse drag)
   const onPointerDown = (e) => {
@@ -191,6 +204,10 @@ export default function Train() {
               <b> show details</b> under an email's sender to check reply-to and mailed-by. Answer with the buttons, a swipe, or your
               <b> ← →</b> keys. 3+ correct in a row earns a streak bonus.
             </div>
+            <div className="mt-3 flex items-start gap-3 rounded-xl bg-critical/20 p-4 text-sm text-red-50 ring-1 ring-red-400/30">
+              <Lives lives={START_LIVES} className="mt-0.5 shrink-0" />
+              <span><b>You have 3 lives.</b> Fall for a scam and you'll watch what the attacker does next, and lose a life and {MISS_PENALTY} points. Flag a real message as fake and you lose {FALSE_ALARM_PENALTY}. Three strikes and your account is compromised.</span>
+            </div>
             {error && <p className="mt-4 rounded-lg bg-red-500/20 p-3 text-sm">{error}</p>}
             <button onClick={start} disabled={phase === 'loading'} className="mt-6 inline-flex items-center gap-2 rounded-xl bg-sunset-500 px-6 py-3 text-lg font-semibold shadow-lg shadow-black/20 transition hover:bg-sunset-600 disabled:opacity-60">
               {phase === 'loading' ? 'Loading…' : <>Start <Arrow className="h-5 w-5" /></>}
@@ -208,6 +225,7 @@ export default function Train() {
   // ---------------- Results ----------------
   if (phase === 'done') {
     const correctCount = answers.filter((a) => a.correct).length;
+    const compromised = lives <= 0;
     const accuracy = Math.round((correctCount / answers.length) * 100);
     const rank = RANKS.find((r) => accuracy >= r.min);
     const misses = {};
@@ -233,13 +251,25 @@ export default function Train() {
       <div className="mx-auto max-w-6xl px-4 py-10">
         <div className="grid gap-6 lg:grid-cols-[minmax(0,7fr)_minmax(0,5fr)]">
           <div className="space-y-5">
+            {compromised && (
+              <div className="pop-in flex items-start gap-3 rounded-3xl bg-[#1a0707] p-5 text-white ring-1 ring-red-500/40 sm:p-6">
+                <Octagon className="mt-0.5 h-7 w-7 shrink-0 text-critical" />
+                <div>
+                  <p className="text-xl font-bold">Account compromised</p>
+                  <p className="mt-1 text-sm text-red-100">Scammers got you 3 times in {answers.length} rounds, so the game ended early. Real attackers only need once. Review the misses below, then try again.</p>
+                </div>
+              </div>
+            )}
             <div className="pop-in rounded-3xl bg-navy-900 p-6 text-white sm:p-8">
-              <p className="text-sm font-semibold uppercase tracking-wider text-sea-300">Your Phish IQ</p>
+              <div className="flex items-center justify-between gap-3">
+                <p className="text-sm font-semibold uppercase tracking-wider text-sea-300">Your Phish IQ</p>
+                {!compromised && <span className="inline-flex items-center gap-2 rounded-full bg-white/10 px-3 py-1 text-xs font-semibold"><Lives lives={lives} /> Survived all {cards.length} rounds</span>}
+              </div>
               <div className="mt-2 flex flex-wrap items-end gap-x-6 gap-y-2">
                 <span className="text-7xl font-bold tracking-tight">{accuracy}</span>
                 <div className="pb-2">
                   <div className="text-2xl font-bold text-sunset-500">{rank.title}</div>
-                  <div className="text-navy-100">{correctCount} of {answers.length} correct · {score.toLocaleString()} points</div>
+                  <div className="text-navy-100">{correctCount} of {answers.length} correct · {score.toLocaleString()} points · hooked {answers.filter((a) => a.hooked).length}×</div>
                 </div>
               </div>
               <p className="mt-4 text-navy-100">{rank.text}</p>
@@ -343,8 +373,12 @@ export default function Train() {
             : last.correct ? (card.isPhish ? 'Nice catch!' : "Correct, it's legit.") : (card.isPhish ? 'Hooked! That was a phish.' : 'False alarm. This one was legit.')}
         </h2>
       </div>
-      {last.correct && (
+      {last.correct ? (
         <p className="mt-1 text-sm font-semibold text-navy-950">+{last.points - last.bonus} pts{last.bonus ? ` · +${last.bonus} streak bonus` : ''}</p>
+      ) : last.hooked ? (
+        <p className="mt-1 inline-flex items-center gap-2 text-sm font-semibold text-critical-ink">−{last.penalty} pts · −1 life <Lives lives={lives} /></p>
+      ) : (
+        <p className="mt-1 text-sm font-semibold text-critical-ink">−{last.penalty} pts. False alarms have a cost too: people who distrust everything end up ignoring real deadlines, refunds and security alerts.</p>
       )}
       <p className="mt-2 text-sm text-slate-700">{card.explanation}</p>
     </div>
@@ -366,7 +400,7 @@ export default function Train() {
   const nextButton = (
     <>
       <button onClick={next} className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-navy-900 px-5 py-3 font-semibold text-white transition hover:bg-navy-800">
-        {idx + 1 >= cards.length ? 'See my results' : 'Next round'} <Arrow className="h-5 w-5" />
+        {lives <= 0 ? 'See what happened' : idx + 1 >= cards.length ? 'See my results' : 'Next round'} <Arrow className="h-5 w-5" />
       </button>
       <p className="flex items-center justify-center gap-1 text-center text-xs text-slate-400"><Info className="h-3.5 w-3.5" /> Press Enter to continue</p>
     </>
@@ -374,12 +408,14 @@ export default function Train() {
 
   return (
     <div className="mx-auto max-w-6xl px-4 py-6">
+      {breach && <Breach card={breach.card} lives={breach.lives} penalty={breach.penalty} onClose={() => setBreach(null)} />}
       {/* Top bar */}
       <div className="sticky top-[57px] z-30 -mx-4 mb-5 border-b border-slate-200 bg-sand-50/95 px-4 py-3 backdrop-blur">
         <div className="flex flex-wrap items-center gap-3">
           <span className="rounded-full bg-navy-900 px-2.5 py-1 text-xs font-bold text-white">Level {card.level} · {LEVELS[card.level].name}</span>
           <span className="text-sm text-slate-500">Round {idx + 1} of {cards.length}</span>
-          <span className="ml-auto inline-flex items-center gap-1 text-sm font-semibold text-sunset-600" title="Streak">
+          <Lives lives={lives} className="ml-auto" />
+          <span className="inline-flex items-center gap-1 text-sm font-semibold text-sunset-600" title="Streak">
             <Flame className="h-4 w-4" /> {streak}
           </span>
           <span className="text-sm font-bold tabular-nums text-navy-950">{score.toLocaleString()} pts</span>

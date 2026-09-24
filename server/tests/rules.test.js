@@ -188,7 +188,7 @@ test('generated questions: 3000 cards are well-formed, and the checker never cri
     }
     checkLinks(c.id, c);
     assert.equal(c.isPhish, c.flags.length > 0, `${c.id}: isPhish mismatch`);
-    assert.ok(!/undefined|NaN/.test(JSON.stringify(c)), `${c.id}: contains undefined/NaN`);
+    assert.ok(!/\bundefined\b|\bNaN\b/.test(JSON.stringify(c)), `${c.id}: contains undefined/NaN`); // \b: random ids can contain the letters "NaN"
     if (!c.isPhish) {
       assert.ok(c.goodSigns?.length, `${c.id}: legit card needs goodSigns`);
       const text = `${c.from.name} <${c.from.address || c.from.name}>\nSubject: ${c.subject || ''}\n\n${c.body}`;
@@ -220,4 +220,46 @@ test('no repeats: 40 games in a row never show the same question twice', () => {
       seen.push(c.id);
     }
   }
+});
+
+// ───────────── Demo upgrades: QR codes, "you got phished", report to ISO ─────────────
+import { analyzeMessage } from '../lib/analyze.js';
+import { attackPlan } from '../../src/lib/attack.js';
+import { buildReport, defang } from '../../src/lib/report.js';
+
+test('QR codes in screenshots are checked even without AI', async () => {
+  const img = { mediaType: 'image/jpeg', data: 'AAAA' };
+  const bad = await analyzeMessage({ image: img, qr: ['https://pepperdine-parking.com/renew'] });
+  assert.equal(bad.verdict, 'scam');
+  assert.ok(bad.qr.only && bad.fromImage);
+  const login = await analyzeMessage({ image: img, qr: ['https://parking-renewals.net/renew/login'] });
+  assert.ok(login.flags.some((f) => f.category === 'risky_link' && f.severity === 'high'));
+  const official = await analyzeMessage({ image: img, qr: ['https://www.pepperdine.edu/parking/renew'] });
+  assert.equal(official.verdict, 'safe');
+  await assert.rejects(() => analyzeMessage({ image: img }), /AI key/);
+});
+
+test('"You got phished": every scam produces a tailored attack story with the real tell', () => {
+  const scams = [
+    ...TRAINING_MESSAGES.filter((m) => m.isPhish),
+    ...TRAINING_TWINS.map((t) => ({ ...t, phish: 'a', a: t.fake, b: t.real })),
+  ];
+  for (let i = 0; i < 400; i++) scams.push(generateSingle({ level: 1 + (i % 3), isPhish: true }));
+  for (const card of scams) {
+    const plan = attackPlan(card);
+    assert.ok(plan.headline && plan.steps.length >= 4, card.id);
+    assert.ok(plan.tell?.quote, `${card.id}: needs a tell`);
+    assert.ok(!/undefined|null/.test(plan.headline + plan.steps.flat().join(' ')), `${card.id}: ${plan.headline}`);
+  }
+  const pwCard = scams.find((m) => m.type !== 'twin' && m.flags.some((f) => f.category === 'credentials') && !m.flags.some((f) => f.category === 'mfa_code'));
+  assert.match(attackPlan(pwCard).headline, /^You (signed in on \S+\.|gave them your password)/);
+});
+
+test('ISO report is filled in and links are defanged', () => {
+  const r = analyzeWithRules('From: IT <help@pepperdlne.edu>\nVerify your password at https://pepperdlne.edu/login today.');
+  const report = buildReport({ ...r, text: 'From: IT <help@pepperdlne.edu>\nVerify your password at https://pepperdlne.edu/login today.' });
+  assert.ok(report.includes('hxxps://pepperdlne[.]edu/login'));
+  assert.ok(!/https?:\/\/pepperdlne\.edu/.test(report), 'no live links in the report');
+  assert.ok(report.includes('Name:') && report.includes('Red flags found'));
+  assert.equal(defang('http://a.b.co'), 'hxxp://a[.]b[.]co');
 });

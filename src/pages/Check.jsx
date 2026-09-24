@@ -4,6 +4,7 @@ import { EXAMPLES } from '../lib/examples.js';
 import { PEPPERDINE } from '../../shared/categories.js';
 import RichText from '../components/RichText.jsx';
 import FlagList from '../components/FlagList.jsx';
+import ReportPanel from '../components/ReportPanel.jsx';
 import { RiskMeter } from '../components/Verdict.jsx';
 import {
   ShieldCheck, Upload, Lock, CheckCircle, Hook, Users, Info, XIcon, Phone, Arrow,
@@ -31,6 +32,30 @@ function Loading({ ai }) {
         <div className="shimmer h-24 rounded-lg" />
       </div>
     </div>
+  );
+}
+
+function QRFound({ codes, aiOn }) {
+  if (!codes?.length) {
+    return <p className="mt-2 text-xs text-slate-500">No QR code found in this image.</p>;
+  }
+  return (
+    <div className="mt-3 rounded-xl border border-navy-100 bg-navy-50 p-3">
+      <div className="flex items-center gap-2 text-sm font-semibold text-navy-950"><QRIcon className="h-4 w-4" /> QR code found. It leads to:</div>
+      <ul className="mt-1.5 space-y-1">
+        {codes.map((c) => <li key={c} className="break-all rounded-md bg-white px-2 py-1 font-mono text-xs text-slate-800">{c}</li>)}
+      </ul>
+      <p className="mt-1.5 text-xs text-slate-500">Decoded on your device. {aiOn ? 'Riptide will check this link along with the message.' : 'Riptide will check this link.'} Don't scan it with your phone until you know it's safe.</p>
+    </div>
+  );
+}
+
+function QRIcon({ className }) {
+  return (
+    <svg viewBox="0 0 24 24" className={className} fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
+      <rect x="3" y="3" width="7" height="7" rx="1" /><rect x="14" y="3" width="7" height="7" rx="1" /><rect x="3" y="14" width="7" height="7" rx="1" />
+      <path d="M14 14h3v3M21 14v.01M14 21h7v-4M17 17h.01" />
+    </svg>
   );
 }
 
@@ -74,7 +99,7 @@ export default function Check({ health }) {
     setActiveN(null);
     setLoading(true);
     try {
-      const body = mode === 'image' && payloadText == null ? { image: image && { mediaType: image.mediaType, data: image.data } } : { text: t };
+      const body = mode === 'image' && payloadText == null ? { image: image && { mediaType: image.mediaType, data: image.data }, qr: image?.qr || [] } : { text: t };
       const r = await api.analyze(body);
       setResult(r);
       setTimeout(() => resultRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 50);
@@ -146,13 +171,14 @@ export default function Check({ health }) {
               <div>
                 {!aiOn && (
                   <p className="mb-3 flex items-start gap-2 rounded-lg bg-amber-50 p-3 text-sm text-warning-ink">
-                    <Info className="mt-0.5 h-4 w-4 shrink-0" /> Reading screenshots needs the AI layer, which is off right now. Paste the text instead.
+                    <Info className="mt-0.5 h-4 w-4 shrink-0" /> The AI layer is off, so Riptide can't read the words in a screenshot right now. It can still check where a QR code in it leads. For a full check, paste the text.
                   </p>
                 )}
                 {image ? (
                   <div className="relative">
                     <img src={image.preview} alt="Uploaded screenshot" className="max-h-80 w-full rounded-xl border border-slate-200 object-contain" />
                     <button onClick={() => setImage(null)} className="absolute right-2 top-2 rounded-full bg-white/90 p-1.5 shadow" aria-label="Remove screenshot"><XIcon className="h-4 w-4" /></button>
+                    <QRFound codes={image.qr} aiOn={aiOn} />
                   </div>
                 ) : (
                   <button
@@ -173,7 +199,7 @@ export default function Check({ health }) {
 
             <button
               onClick={() => analyze()}
-              disabled={!canSubmit || (mode === 'image' && !aiOn)}
+              disabled={!canSubmit || (mode === 'image' && !aiOn && !image?.qr?.length)}
               className="mt-3 inline-flex w-full items-center justify-center gap-2 rounded-xl bg-sunset-500 px-4 py-3 font-semibold text-white shadow-sm transition hover:bg-sunset-600 disabled:cursor-not-allowed disabled:opacity-50"
             >
               <ShieldCheck className="h-5 w-5" /> {loading ? 'Checking…' : 'Check this message'}
@@ -218,7 +244,13 @@ export default function Check({ health }) {
                   <h2 className="font-semibold text-navy-950">The message, with red flags highlighted</h2>
                   {items.length > 0 && <span className="text-xs text-slate-500">Hover or tap a highlight</span>}
                 </div>
-                {result.fromImage && <p className="mt-1 text-xs text-slate-500">Text read from your screenshot by the AI.</p>}
+                {result.fromImage && (
+                  <p className="mt-1 text-xs text-slate-500">
+                    {result.qr?.only
+                      ? "Only the QR code was checked (the AI layer is off, so the screenshot's words weren't read)."
+                      : `Text read from your screenshot by the AI${result.qr ? ', plus where its QR code leads' : ''}.`}
+                  </p>
+                )}
                 <div className="mt-3 max-h-96 overflow-auto rounded-xl bg-sand-50 p-4 pt-8 text-sm leading-relaxed text-slate-800">
                   <RichText text={result.text} items={items} activeN={activeN} onActivate={setActiveN} />
                 </div>
@@ -257,6 +289,8 @@ export default function Check({ health }) {
                   <a href={PEPPERDINE.reportIncidentUrl} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1.5 rounded-lg bg-white/10 px-3 py-1.5 font-medium hover:bg-white/20"><Hook className="h-4 w-4" /> Report to Pepperdine IT</a>
                 </div>
               </div>
+
+              {result.verdict !== 'safe' && <ReportPanel result={result} />}
 
               {result.verdict !== 'safe' && (
                 <div className="rounded-2xl border border-slate-200 bg-white p-5">

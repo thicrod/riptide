@@ -110,6 +110,16 @@ body {
 .pop-in { animation: popIn 320ms cubic-bezier(.2,1.4,.4,1) both; }
 @keyframes popIn { from { opacity: 0; transform: scale(.92); } to { opacity: 1; transform: none; } }
 
+.breach-in { animation: breachIn 520ms cubic-bezier(.2,1.2,.4,1) both; }
+@keyframes breachIn {
+  0% { opacity: 0; transform: scale(.9); }
+  45% { opacity: 1; transform: scale(1.02) translateX(0); }
+  60% { transform: translateX(-8px); }
+  75% { transform: translateX(6px); }
+  90% { transform: translateX(-3px); }
+  100% { transform: none; }
+}
+
 .shimmer {
   background: linear-gradient(90deg, #eef2f7 0%, #f8fafc 50%, #eef2f7 100%);
   background-size: 200% 100%;

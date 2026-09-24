@@ -104,6 +104,9 @@ export const PEPPERDINE = {
   techSupportPhone: '310.506.4357',
   techSupportVanity: '310.506.HELP',
   reportIncidentUrl: 'https://community.pepperdine.edu/it/security/report-incident/',
+  // Information Security Office: for when someone already shared a password, code or other confidential info.
+  isoPhone: '310.506.4040',
+  isoEmail: 'iso@pepperdine.edu',
   phishingGuideUrl: 'https://community.pepperdine.edu/it/security/training/phishing/',
   phishAlert: 'Phish Alert Button (the orange fish hook above the message in Gmail, when signed into Chrome with your Pepperdine account)',
 };

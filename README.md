@@ -5,6 +5,9 @@ Pepperdine Cybersecurity & Campus Safety Hackathon (Project 1: Cyber Threat Awar
 
 - **Check** — paste a suspicious email/text/DM (or upload a screenshot) → risk score, every red flag
   highlighted in the message, and Pepperdine-specific next steps (Phish Alert Button, Tech Support 310.506.4357).
+  **QR codes** in screenshots are decoded on the device and their real destination is checked (works even
+  without the AI layer). **Report it**: the Phish Alert Button steps, or, if you already clicked, the Information
+  Security Office (310.506.4040) with a pre-filled, defanged incident report for iso@pepperdine.edu.
 - **Train (Spot the Phish)** — 10 hard rounds across 3 levels (Look closer → Pixel-perfect → AI-era),
   drawn from 26 hand-written questions plus a **question generator** (20 realistic templates × 20+ subtle tricks ×
   random names, amounts, dates and codes = thousands of combinations). Each browser remembers what it has seen,
@@ -14,6 +17,9 @@ Pepperdine Cybersecurity & Campus Safety Hackathon (Project 1: Cyber Threat Awar
   one changed word ("confirm" vs "change" your password), hacked real accounts. About half the messages are real,
   and 2 rounds per game are **spot the difference**: a real and a fake message side by side. After each answer,
   a character-level "Real vs Fake" comparison shows exactly what changed. Phish IQ, weak spot, leaderboard.
+  **3 lives:** fall for a scam and a "You got phished" screen plays out what the attacker does next with *that*
+  message (password reuse, mail filters, gift cards drained, fake checks bouncing), then shows the tell you missed.
+  Missing a scam costs a life and 100 points; a false alarm costs 50. Three strikes = "Account compromised".
 - **The loop** — people can *opt in* to share a scam; IT approves it on the **Dashboard**; approved
   reports become "Reported at Pepperdine" rounds in the game. Training stays current with real attacks.
 
@@ -33,7 +39,7 @@ npm run dev
 
 Open **http://localhost:5173**. (`npm run dev` starts the API on :3001 and the React app on :5173.)
 
-Run the tests any time with `npm test` (19 tests, including 3,000 generated questions checked for correctness,
+Run the tests any time with `npm test` (22 tests, including 3,000 generated questions checked for correctness,
 zero false alarms on generated legit messages, and 40 games in a row without a repeated question).
 
 ### Turning on the AI layer
@@ -122,6 +128,8 @@ Production build locally: `npm run build && npm start` → http://localhost:3001
 | `server/lib/scrub.js` | Privacy redaction before AI. |
 | `shared/trainingMessages.js` | 22 game messages (12 phish / 10 legit) + 4 spot-the-difference pairs, with red flags, Real-vs-Fake comparisons and explanations. |
 | `server/lib/generator.js` | The question generator: templates (Pepperdine IT, Financial Aid, Registrar, Library, Google, PayPal, USPS, DocuSign, Handshake, Zoom, Amazon, Netflix, Apple, Instagram, bank and campus alerts…) × tricks (swapped/missing/extra letters, digits for letters, rn→m, I→l, Cyrillic letters, dash-for-dot, fake endings, hidden links, @ tricks, faked From lines, one changed sentence…). |
+| `src/lib/attack.js` + `src/components/Breach.jsx` | The "You got phished" attack story, picked from what the scam was after. |
+| `src/lib/report.js` | The pre-filled, defanged incident report for Pepperdine's Information Security Office. |
 | `src/components/SpotDiff.jsx` | Character-level diff that highlights exactly what the scammer changed. |
 | `shared/categories.js` | Red-flag categories, tips, and Pepperdine IT resources. |
 | `src/components/RichText.jsx` | The shared highlighter used by both Check and the game. |

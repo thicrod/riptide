@@ -488,6 +488,18 @@ export function analyzeWithRules(input) {
     }
   }
 
+  // A QR code (decoded in the browser) that opens a login/payment page on a site that isn't official.
+  for (const s of urlSpans) {
+    if (!text.slice(Math.max(0, s.start - 25), s.start).includes('Scanned code leads to:')) continue;
+    let host = '';
+    let path = '';
+    try { const u = new URL(/^https?:\/\//i.test(s.raw) ? s.raw : `https://${s.raw}`); host = u.hostname; path = u.pathname + u.search; } catch { continue; }
+    if (!officialBrandOf(host) && /log-?in|sign-?in|verify|account|pay|renew|secure|auth|password|wallet|refund/i.test(path)) {
+      addFlag({ start: s.start, end: s.end, category: 'risky_link', severity: 'high', ruleId: 'qrdest',
+        why: `The QR code opens a ${/pay|renew|wallet|refund/i.test(path) ? 'payment' : 'login'} page on ${host}, which isn't an official site. QR codes are used because you can't hover them to check.` });
+    }
+  }
+
   PHRASE_RULES.forEach((rule, i) => {
     rule.re.lastIndex = 0;
     let pm;

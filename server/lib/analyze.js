@@ -88,7 +88,7 @@ function buildActions(verdict, flags, aiActions = []) {
     out.push("Don't click the links, open attachments or reply.");
     out.push(`Report it with the Phish Alert Button (orange fish hook) in Gmail, or call Tech Support at ${PEPPERDINE.techSupportPhone} (24/7).`);
     if (cats.has('credentials') || cats.has('mfa_code')) {
-      out.push('Already typed your password or a code? Change your password now and call Tech Support.');
+      out.push(`Already typed your password or a code? Change your password now and call Pepperdine's Information Security Office at ${PEPPERDINE.isoPhone}.`);
     } else if (cats.has('money') || cats.has('job_scam')) {
       out.push("Already sent money or deposited a check? Contact your bank right away. Don't send more.");
     }
@@ -107,13 +107,24 @@ function buildActions(verdict, flags, aiActions = []) {
   return out.slice(0, 4);
 }
 
-export async function analyzeMessage({ text, image }) {
+// QR codes are decoded in the browser. Their destination is added as a line the rules engine checks
+// like any other link (no AI needed). The label avoids the words "QR code" so it doesn't trip the QR rule.
+export const QR_LABEL = 'Scanned code leads to:';
+const qrLines = (qr) => (qr || []).map((u) => `${QR_LABEL} ${u}`).join('\n');
+
+export async function analyzeMessage({ text, image, qr = [] }) {
   let original = String(text || '').slice(0, MAX_TEXT);
   const ai = aiInfo();
+  qr = qr.filter((u) => typeof u === 'string' && u.trim()).map((u) => u.trim().slice(0, 2000)).slice(0, 3);
 
   if (!original.trim() && !image) throw new HttpError(400, 'Paste a message or upload a screenshot first.');
+  // Without AI we can't read the screenshot's text, but we can still check where its QR code goes.
+  let qrOnly = false;
   if (image && !ai) {
-    throw new HttpError(400, 'Reading screenshots needs an AI key (see README). For now, paste the message text instead.');
+    if (!qr.length) throw new HttpError(400, 'Reading screenshots needs an AI key (see README). For now, paste the message text instead.');
+    qrOnly = true;
+    image = null;
+    original = qrLines(qr);
   }
 
   let rules = original.trim() ? analyzeWithRules(original) : null;
@@ -123,23 +134,34 @@ export async function analyzeMessage({ text, image }) {
 
   if (ai) {
     try {
-      aiResult = await runAI({ text: scrubbed.text, image, hints: rules?.flags });
+      aiResult = await runAI({ text: image && qr.length ? `(Decoded from a QR code in the screenshot)\n${qrLines(qr)}` : scrubbed.text, image, hints: rules?.flags });
     } catch (err) {
       aiError = err.message;
       console.warn('[ai] failed:', err.message);
     }
     if (image && aiResult?.extracted_text) {
-      original = aiResult.extracted_text.slice(0, MAX_TEXT);
+      const extracted = aiResult.extracted_text.slice(0, MAX_TEXT);
+      original = extracted.includes(QR_LABEL) ? extracted : [extracted, qrLines(qr)].filter(Boolean).join('\n\n');
       rules = analyzeWithRules(original);
     }
   }
-  if (image && !aiResult) throw new HttpError(502, `Couldn't read the screenshot (${aiError || 'no response'}). Try pasting the text.`);
+  if (image && !aiResult) {
+    if (!qr.length) throw new HttpError(502, `Couldn't read the screenshot (${aiError || 'no response'}). Try pasting the text.`);
+    qrOnly = true;
+    original = qrLines(qr);
+    rules = analyzeWithRules(original);
+  }
+  if (image && aiResult && qr.length && !aiResult.extracted_text) {
+    original = qrLines(qr);
+    rules = analyzeWithRules(original);
+  }
 
   const merged = mergeResults(original, rules, aiResult);
   return {
     ...merged,
     text: original,
-    fromImage: !!image,
+    fromImage: !!image || qrOnly,
+    qr: qr.length ? { codes: qr, only: qrOnly } : null,
     engine: {
       rules: true,
       ai: aiResult ? { provider: ai.label, model: ai.model } : null,

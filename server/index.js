@@ -57,13 +57,14 @@ app.get('/api/health', (req, res) => {
 });
 
 app.post('/api/analyze', rateLimit({ windowMs: 60000, max: 15 }), async (req, res) => {
-  const { text, image } = req.body || {};
+  const { text, image, qr } = req.body || {};
   if (text != null && typeof text !== 'string') throw new HttpError(400, 'Text must be a string.');
+  if (qr != null && (!Array.isArray(qr) || qr.length > 3 || qr.some((u) => typeof u !== 'string' || u.length > 2000))) throw new HttpError(400, 'Bad QR data.');
   if (image) {
     if (!IMAGE_TYPES.has(image.mediaType) || typeof image.data !== 'string') throw new HttpError(400, 'Unsupported image. Use PNG, JPG, WEBP or GIF.');
     if (image.data.length * 0.75 > 5 * 1024 * 1024) throw new HttpError(413, 'Image is too large (max 5 MB).');
   }
-  const result = await analyzeMessage({ text, image });
+  const result = await analyzeMessage({ text, image, qr: qr || [] });
   store.recordCheck(result); // counts only, never the message
   res.json(result);
 });
