@@ -1,0 +1,20 @@
+# One-click deploy on Render (https://render.com): New > Blueprint > pick this repo.
+services:
+  - type: web
+    name: riptide
+    runtime: node
+    plan: free
+    buildCommand: npm install && npm run build
+    startCommand: npm start
+    envVars:
+      - key: NODE_VERSION
+        value: 22
+      - key: ANTHROPIC_API_KEY
+        sync: false
+      - key: ANTHROPIC_MODEL
+        value: claude-haiku-4-5
+      - key: ADMIN_KEY
+        generateValue: true
+      # The free plan wipes saved data when the server sleeps; this reloads labeled sample data.
+      - key: SEED_SAMPLE_DATA
+        value: "true"
