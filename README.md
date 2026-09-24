@@ -80,9 +80,9 @@ and add the same environment variables.
 
 **Free plan notes:** the server sleeps after 15 minutes without visitors (the next visit takes about a minute
 to wake it, so open the link before your demo), and saved data (stats, reports, leaderboard) is wiped whenever it
-sleeps, restarts or redeploys. `SEED_SAMPLE_DATA=true` (already in `render.yaml`) reloads the labeled sample data
-on every start so the dashboard is never empty. For data that survives, use a paid instance with a disk or a
-database.
+sleeps, restarts or redeploys. `SEED_SAMPLE_DATA` is `false` in `render.yaml`, so the live dashboard starts empty and shows only real
+activity. Set it to `true` (Render → Environment) to reload the labeled sample data on every start instead. For data that survives
+restarts, use a paid instance with a disk or a database.
 
 Production build locally: `npm run build && npm start` → http://localhost:3001
 

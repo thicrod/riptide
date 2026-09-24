@@ -15,6 +15,6 @@ services:
         value: claude-haiku-4-5
       - key: ADMIN_KEY
         generateValue: true
-      # The free plan wipes saved data when the server sleeps; this reloads labeled sample data.
+      # "true" reloads labeled sample data on every start (the free plan wipes data when it sleeps).
       - key: SEED_SAMPLE_DATA
-        value: "true"
+        value: "false"
