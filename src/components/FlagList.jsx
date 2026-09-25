@@ -18,7 +18,8 @@ export default function FlagList({ items, activeN, onActivate, showSource = fals
           <li
             key={f.n}
             onMouseEnter={() => onActivate?.(f.n)}
-            className={`flex gap-3 rounded-xl border bg-white p-3 transition ${active ? 'border-navy-900 shadow-sm' : 'border-slate-200'}`}
+            onClick={() => onActivate?.(f.n)}
+            className={`flex cursor-default gap-3 rounded-xl border bg-white p-3.5 transition ${active ? 'border-navy-900 bg-navy-50/40 shadow-sm' : 'border-slate-200 hover:border-slate-300'}`}
           >
             <span className="flag-num mt-0.5 shrink-0" style={{ minWidth: '1.4rem', height: '1.4rem', fontSize: '0.75rem' }}>{f.n}</span>
             <div className="min-w-0 flex-1">

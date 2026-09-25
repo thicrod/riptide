@@ -35,7 +35,7 @@ function Marked({ chars, keep, tone }) {
 export default function SpotDiff({ items }) {
   if (!items?.length) return null;
   return (
-    <div className="rounded-2xl border border-slate-200 bg-white p-5">
+    <div className="card p-5">
       <h3 className="font-semibold text-navy-950">Spot the difference</h3>
       <p className="text-xs text-slate-500">What changed is highlighted.</p>
       <div className="mt-3 space-y-3">

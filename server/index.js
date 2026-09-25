@@ -4,6 +4,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import express from 'express';
+import compression from 'compression';
 
 try { process.loadEnvFile?.(); } catch { /* no .env file — that's fine */ }
 
@@ -39,10 +40,11 @@ app.use((req, res, next) => {
   res.setHeader('Permissions-Policy', 'camera=(), microphone=(), geolocation=()');
   if (!req.path.startsWith('/api')) {
     res.setHeader('Content-Security-Policy',
-      "default-src 'self'; img-src 'self' data: blob:; style-src 'self' 'unsafe-inline'; script-src 'self'; connect-src 'self'; frame-ancestors 'none'");
+      "default-src 'self'; img-src 'self' data: blob:; font-src 'self' data:; style-src 'self' 'unsafe-inline'; script-src 'self'; connect-src 'self'; frame-ancestors 'none'");
   }
   next();
 });
+app.use(compression()); // gzip: the app's JavaScript goes over the wire ~3x smaller
 app.use(express.json({ limit: '8mb' }));
 
 const requireAdmin = (req, res, next) => {
@@ -106,8 +108,14 @@ app.use('/api', (req, res) => res.status(404).json({ error: 'Not found' }));
 
 // ---------- Static app (production) ----------
 if (fs.existsSync(DIST)) {
-  app.use(express.static(DIST, { index: 'index.html', maxAge: '1h' }));
-  app.get(/.*/, (req, res) => res.sendFile(path.join(DIST, 'index.html')));
+  // Built files have a content hash in their name, so they can be cached for a year.
+  // index.html must always be re-checked, or a redeploy could leave browsers pointing at old files.
+  app.use('/assets', express.static(path.join(DIST, 'assets'), { immutable: true, maxAge: '1y', fallthrough: false }));
+  app.use(express.static(DIST, { index: false, maxAge: '1d' }));
+  app.get(/.*/, (req, res) => {
+    res.setHeader('Cache-Control', 'no-cache');
+    res.sendFile(path.join(DIST, 'index.html'));
+  });
 }
 
 // ---------- Errors ----------

@@ -24,16 +24,16 @@ export default function ReportPanel({ result }) {
       role="tab"
       aria-selected={path === id}
       onClick={() => setPath(id)}
-      className={`flex-1 rounded-md px-3 py-2 text-sm font-semibold transition ${path === id ? 'bg-white text-navy-950 shadow-sm' : 'text-slate-500 hover:text-slate-800'}`}
+      className={`rounded-lg px-3 py-2 text-sm font-semibold transition ${path === id ? 'bg-white text-navy-950 shadow-sm' : 'text-slate-500 hover:text-slate-800'}`}
     >
       {label}
     </button>
   );
 
   return (
-    <div className="rounded-2xl border border-slate-200 bg-white p-5">
-      <div className="flex items-center gap-2"><Hook className="h-5 w-5 text-sunset-600" /><h2 className="font-semibold text-navy-950">Report it to Pepperdine</h2></div>
-      <div role="tablist" className="mt-3 flex gap-1 rounded-lg bg-slate-100 p-1">
+    <div className="card p-5 sm:p-6">
+      <div className="flex items-center gap-3"><span className="flex h-9 w-9 items-center justify-center rounded-xl bg-sunset-50 text-sunset-600"><Hook className="h-5 w-5" /></span><h2 className="font-bold text-navy-950">Report it to Pepperdine</h2></div>
+      <div role="tablist" className="mt-4 grid grid-cols-2 gap-1 rounded-xl bg-slate-100 p-1">
         {tab('safe', "I didn't click anything")}
         {tab('hooked', 'I clicked or replied')}
       </div>

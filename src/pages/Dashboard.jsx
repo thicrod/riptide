@@ -2,7 +2,8 @@ import { useEffect, useState } from 'react';
 import { api } from '../lib/api.js';
 import { categoryLabel } from '../../shared/categories.js';
 import { VerdictBadge } from '../components/Verdict.jsx';
-import { CheckCircle, Alert, Octagon, Lock, Users, Refresh, Info, Check, XIcon } from '../components/Icons.jsx';
+import { CheckCircle, Alert, Octagon, Lock, Users, Refresh, Info, Check, XIcon, BarChart, ShieldCheck, Hook } from '../components/Icons.jsx';
+import { PageHeader, CountUp, LivePill } from '../components/ui.jsx';
 
 const SERIES = '#2a78d6'; // single-series chart color (validated reference blue)
 
@@ -12,13 +13,15 @@ function StatTile({ icon: Ico, label, value, share, tone }) {
     warning: 'text-warning-ink bg-amber-50',
     critical: 'text-critical-ink bg-red-50',
   };
+  const bars = { good: 'bg-good', warning: 'bg-warning', critical: 'bg-critical' };
   return (
-    <div className="rounded-2xl border border-slate-200 bg-white p-4">
-      <div className={`inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-xs font-semibold ${tones[tone]}`}>
+    <div className="card p-5">
+      <div className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-semibold ${tones[tone]}`}>
         <Ico className="h-3.5 w-3.5" /> {label}
       </div>
-      <div className="mt-2 text-3xl font-bold text-navy-950">{value.toLocaleString()}</div>
-      <div className="text-sm text-slate-500">{share}% of checks</div>
+      <div className="mt-3 font-display text-4xl font-extrabold tracking-tight text-navy-950"><CountUp value={value} /></div>
+      <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-slate-100"><div className={`h-full rounded-full transition-[width] duration-1000 ${bars[tone]}`} style={{ width: `${share}%` }} /></div>
+      <div className="mt-1.5 text-sm text-slate-500">{share}% of checks</div>
     </div>
   );
 }
@@ -121,11 +124,11 @@ function Reports() {
   }
 
   return (
-    <div className="rounded-2xl border border-slate-200 bg-white p-5">
-      <div className="flex flex-wrap items-center gap-2">
-        <Users className="h-5 w-5 text-navy-800" />
+    <div className="card p-5 sm:p-6">
+      <div className="flex flex-wrap items-center gap-3">
+        <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-navy-50 text-navy-800"><Users className="h-5 w-5" /></span>
         <h2 className="font-bold text-navy-950">Community reports</h2>
-        <span className="text-sm text-slate-500">· IT review queue</span>
+        <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs font-semibold text-slate-600">IT review queue</span>
       </div>
       <p className="mt-1 text-sm text-slate-600">Messages people chose to share (personal numbers already removed). Approved reports become "Reported at Pepperdine" rounds in Spot the Phish.</p>
 
@@ -134,9 +137,9 @@ function Reports() {
           <label htmlFor="adminkey" className="sr-only">Admin key</label>
           <div className="relative flex-1">
             <Lock className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
-            <input id="adminkey" type="password" value={key} onChange={(e) => setKey(e.target.value)} placeholder="IT admin key" className="w-full rounded-lg border border-slate-200 py-2 pl-9 pr-3 text-sm outline-none focus:border-navy-700 focus:ring-4 focus:ring-navy-100" />
+            <input id="adminkey" type="password" value={key} onChange={(e) => setKey(e.target.value)} placeholder="IT admin key" className="field py-2.5 pl-9 pr-3 text-sm" />
           </div>
-          <button disabled={busy || !key} className="rounded-lg bg-navy-900 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50">{busy ? 'Opening…' : 'Open queue'}</button>
+          <button disabled={busy || !key} className="btn btn-dark">{busy ? 'Opening…' : 'Open queue'}</button>
         </form>
       ) : (
         <div className="mt-4 space-y-3">
@@ -160,8 +163,8 @@ function Reports() {
                 </div>
               )}
               <div className="mt-3 flex gap-2">
-                <button onClick={() => setStatus(s.id, 'approved')} disabled={s.status === 'approved'} className="inline-flex items-center gap-1 rounded-lg bg-navy-900 px-3 py-1.5 text-xs font-semibold text-white disabled:opacity-40"><Check className="h-3.5 w-3.5" /> Approve for training</button>
-                <button onClick={() => setStatus(s.id, 'rejected')} disabled={s.status === 'rejected'} className="inline-flex items-center gap-1 rounded-lg border border-slate-300 px-3 py-1.5 text-xs font-semibold text-slate-700 disabled:opacity-40"><XIcon className="h-3.5 w-3.5" /> Reject</button>
+                <button onClick={() => setStatus(s.id, 'approved')} disabled={s.status === 'approved'} className="btn btn-dark btn-sm"><Check className="h-3.5 w-3.5" /> Approve for training</button>
+                <button onClick={() => setStatus(s.id, 'rejected')} disabled={s.status === 'rejected'} className="btn btn-outline btn-sm"><XIcon className="h-3.5 w-3.5" /> Reject</button>
               </div>
             </div>
           ))}
@@ -180,59 +183,86 @@ export default function Dashboard() {
     api.stats().then(setStats).catch((e) => setError(e.message));
   }, []);
 
-  if (error) return <div className="mx-auto max-w-6xl px-4 py-10 text-critical-ink">{error}</div>;
-  if (!stats) return <div className="mx-auto max-w-6xl px-4 py-10"><div className="shimmer h-40 rounded-2xl" /></div>;
+  if (error) return <div className="mx-auto max-w-6xl px-4 py-10"><div className="card p-6 text-critical-ink">{error}</div></div>;
+  if (!stats) {
+    return (
+      <div className="mx-auto max-w-6xl px-4 py-12">
+        <div className="shimmer h-10 w-72 rounded-lg" />
+        <div className="mt-8 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">{[0, 1, 2, 3].map((i) => <div key={i} className="shimmer h-36 rounded-2xl" />)}</div>
+        <div className="mt-6 grid grid-cols-1 gap-4 lg:grid-cols-2"><div className="shimmer h-72 rounded-2xl" /><div className="shimmer h-72 rounded-2xl" /></div>
+      </div>
+    );
+  }
 
   const total = stats.checks || 0;
   const pct = (n) => (total ? Math.round((n / total) * 100) : 0);
 
   return (
-    <div className="mx-auto max-w-6xl px-4 py-10">
-      <div className="flex flex-wrap items-end justify-between gap-3">
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight text-navy-950">Campus Threat Pulse</h1>
-          <p className="mt-1 text-slate-600">What Riptide is seeing across Pepperdine. Anonymous counts only, never message content.</p>
-        </div>
-        {stats.sampleData && (
+    <div className="mx-auto max-w-6xl px-4 py-8 sm:py-12">
+      <PageHeader
+        eyebrow="Campus threat pulse"
+        icon={BarChart}
+        title="What Riptide is seeing"
+        description="Live, anonymous totals from checks across Pepperdine. Never message content."
+        actions={stats.sampleData ? (
           <span className="inline-flex items-center gap-1.5 rounded-full bg-amber-50 px-3 py-1 text-xs font-semibold text-warning-ink ring-1 ring-amber-200">
-            <Info className="h-3.5 w-3.5" /> Sample data for demo (run <code className="font-mono">npm run reset</code> to clear)
+            <Info className="h-3.5 w-3.5" /> Sample data for the demo
           </span>
-        )}
-      </div>
+        ) : <LivePill>Live</LivePill>}
+      />
 
-      <div className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <div className="rounded-2xl bg-navy-900 p-4 text-white">
-          <div className="text-xs font-semibold uppercase tracking-wider text-sea-300">Messages checked</div>
-          <div className="mt-1 text-5xl font-bold">{total.toLocaleString()}</div>
-          <div className="text-sm text-navy-100">{stats.players} game score{stats.players === 1 ? '' : 's'} · {stats.reports.approved} report{stats.reports.approved === 1 ? '' : 's'} in training</div>
+      {total === 0 && (
+        <div className="card mt-8 flex flex-col items-start gap-4 p-6 sm:flex-row sm:items-center">
+          <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-sunset-50 text-sunset-600"><ShieldCheck className="h-6 w-6" /></span>
+          <div className="flex-1">
+            <div className="font-bold text-navy-950">No checks yet. Be the first.</div>
+            <p className="mt-0.5 text-sm text-slate-600">Every message someone checks adds to these anonymous totals, so IT can see which tricks are hitting campus.</p>
+          </div>
+          <div className="flex gap-2">
+            <a href="#/check" className="btn btn-primary btn-sm"><ShieldCheck className="h-4 w-4" /> Check a message</a>
+            <a href="#/train" className="btn btn-outline btn-sm"><Hook className="h-4 w-4" /> Play</a>
+          </div>
+        </div>
+      )}
+
+      <div className="mt-8 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <div className="relative overflow-hidden rounded-[1.25rem] bg-navy-900 p-5 text-white">
+          <div className="pointer-events-none absolute -right-10 -top-10 h-32 w-32 rounded-full bg-sea-500/30 blur-2xl" />
+          <div className="relative text-xs font-semibold uppercase tracking-wider text-sea-300">Messages checked</div>
+          <div className="relative mt-2 font-display text-5xl font-extrabold tracking-tight"><CountUp value={total} /></div>
+          <div className="relative mt-2 text-sm text-navy-100">{stats.players} game score{stats.players === 1 ? '' : 's'} · {stats.reports.approved} report{stats.reports.approved === 1 ? '' : 's'} in training</div>
         </div>
         <StatTile icon={Octagon} label="Likely scam" value={stats.byVerdict.scam || 0} share={pct(stats.byVerdict.scam || 0)} tone="critical" />
         <StatTile icon={Alert} label="Suspicious" value={stats.byVerdict.suspicious || 0} share={pct(stats.byVerdict.suspicious || 0)} tone="warning" />
         <StatTile icon={CheckCircle} label="Looks safe" value={stats.byVerdict.safe || 0} share={pct(stats.byVerdict.safe || 0)} tone="good" />
       </div>
 
-      <div className="mt-6 grid gap-4 lg:grid-cols-2">
-        <div className="rounded-2xl border border-slate-200 bg-white p-5">
+      <div className="mt-6 grid grid-cols-1 gap-4 lg:grid-cols-2">
+        <div className="card p-5 sm:p-6">
           <h2 className="font-bold text-navy-950">Messages checked, last 7 days</h2>
+          <p className="text-xs text-slate-500">Hover a day for details</p>
           <div className="mt-3"><ColumnChart data={stats.last7Days} /></div>
         </div>
-        <div className="rounded-2xl border border-slate-200 bg-white p-5">
+        <div className="card p-5 sm:p-6">
           <h2 className="font-bold text-navy-950">Most common red flags</h2>
           <p className="mb-4 text-xs text-slate-500">Number of checks where each warning sign appeared</p>
           <BarList data={stats.topCategories} total={total} />
         </div>
       </div>
 
-      <details className="mt-4 rounded-2xl border border-slate-200 bg-white p-5 text-sm">
-        <summary className="cursor-pointer font-semibold text-navy-950">View the data as a table</summary>
-        <div className="mt-3 grid gap-6 md:grid-cols-2">
+      <details className="card group mt-4 p-5 text-sm sm:p-6">
+        <summary className="flex cursor-pointer list-none items-center justify-between font-semibold text-navy-950">
+          View the data as a table
+          <span className="text-slate-400 transition group-open:rotate-90">›</span>
+        </summary>
+        <div className="mt-3 grid grid-cols-1 gap-6 md:grid-cols-2">
           <table className="w-full text-left">
             <thead><tr className="border-b border-slate-200 text-slate-500"><th className="py-1 font-medium">Day</th><th className="py-1 text-right font-medium">Checks</th></tr></thead>
-            <tbody>{stats.last7Days.map((d) => <tr key={d.date} className="border-b border-slate-100"><td className="py-1">{d.date}</td><td className="py-1 text-right tabular-nums">{d.checks}</td></tr>)}</tbody>
+            <tbody>{stats.last7Days.map((d) => <tr key={d.date} className="border-b border-slate-100"><td className="py-1">{d.date}</td><td className="py-1 text-right tabular">{d.checks}</td></tr>)}</tbody>
           </table>
           <table className="w-full text-left">
             <thead><tr className="border-b border-slate-200 text-slate-500"><th className="py-1 font-medium">Red flag</th><th className="py-1 text-right font-medium">Checks</th></tr></thead>
-            <tbody>{stats.topCategories.map((d) => <tr key={d.category} className="border-b border-slate-100"><td className="py-1">{categoryLabel(d.category)}</td><td className="py-1 text-right tabular-nums">{d.count}</td></tr>)}</tbody>
+            <tbody>{stats.topCategories.map((d) => <tr key={d.category} className="border-b border-slate-100"><td className="py-1">{categoryLabel(d.category)}</td><td className="py-1 text-right tabular">{d.count}</td></tr>)}</tbody>
           </table>
         </div>
       </details>

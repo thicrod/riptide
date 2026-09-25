@@ -7,7 +7,7 @@ export function useHashRoute() {
   useEffect(() => {
     const onChange = () => {
       setRoute(read());
-      window.scrollTo({ top: 0 });
+      window.scrollTo({ top: 0, behavior: 'instant' });
     };
     window.addEventListener('hashchange', onChange);
     return () => window.removeEventListener('hashchange', onChange);

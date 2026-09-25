@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { Octagon, Arrow } from './Icons.jsx';
 import { CATEGORIES } from '../../shared/categories.js';
 import { attackPlan, nextVariant, storyKeyFor, START_LIVES } from '../lib/attack.js';
@@ -54,8 +55,9 @@ export default function Breach({ card, lives, penalty, onClose }) {
   }, [onClose]);
 
   const done = shown >= plan.steps.length;
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 p-4 backdrop-blur-sm" role="alertdialog" aria-modal="true" aria-labelledby="breach-title" aria-describedby="breach-steps">
+  // Rendered straight into <body> so nothing on the page (tab bar, sticky bars) can sit on top of it.
+  return createPortal(
+    <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/75 p-4 backdrop-blur-sm" role="alertdialog" aria-modal="true" aria-labelledby="breach-title" aria-describedby="breach-steps">
       <div className="breach-in max-h-[92vh] w-full max-w-lg overflow-y-auto rounded-3xl bg-[#1a0707] p-6 text-white shadow-2xl ring-1 ring-red-500/40 sm:p-7">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <span className="inline-flex items-center gap-2 whitespace-nowrap rounded-full bg-critical px-3 py-1 text-xs font-black uppercase tracking-widest">
@@ -99,5 +101,5 @@ export default function Breach({ card, lives, penalty, onClose }) {
         </button>
       </div>
     </div>
-  );
+  , document.body);
 }
