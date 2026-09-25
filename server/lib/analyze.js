@@ -164,7 +164,7 @@ export async function analyzeMessage({ text, image, qr = [] }) {
     qr: qr.length ? { codes: qr, only: qrOnly } : null,
     engine: {
       rules: true,
-      ai: aiResult ? { provider: ai.label, model: ai.model } : null,
+      ai: aiResult ? { provider: ai.label, model: aiInfo()?.model || ai.model } : null, // Gemini may switch models
       aiError: aiError ? 'AI analysis was unavailable, so this result uses rules only.' : null,
     },
     privacy: {

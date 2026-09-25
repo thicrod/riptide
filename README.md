@@ -39,7 +39,7 @@ npm run dev
 
 Open **http://localhost:5173**. (`npm run dev` starts the API on :3001 and the React app on :5173.)
 
-Run the tests any time with `npm test` (22 tests, including 3,000 generated questions checked for correctness,
+Run the tests any time with `npm test` (23 tests, including 3,000 generated questions checked for correctness,
 zero false alarms on generated legit messages, and 40 games in a row without a repeated question).
 
 ### Turning on the AI layer
@@ -50,8 +50,10 @@ Riptide works without AI ("rules-only mode" badge in the header). To turn on the
 - **Claude (recommended):** get a key at https://console.anthropic.com → `ANTHROPIC_API_KEY=sk-ant-...`
   - `claude-haiku-4-5` (default) is fast and cheap; switch `ANTHROPIC_MODEL=claude-sonnet-4-5` for more accuracy.
 - **or OpenAI:** `OPENAI_API_KEY=sk-...` (default model `gpt-4o-mini`).
+- **or Google Gemini (free, no card):** get a key at https://aistudio.google.com/apikey → `GEMINI_API_KEY=...`.
+  On the free tier Google may use what's sent to improve its models, so the Check page says so when Gemini is on.
 
-Restart `npm run dev`. The header badge turns green: **AI on · Claude**.
+Restart `npm run dev`. The header badge turns green: **AI on · Claude** (or OpenAI / Gemini).
 
 ### Demo data
 

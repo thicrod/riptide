@@ -268,3 +268,49 @@ test('ISO report is filled in and links are defanged', () => {
   assert.ok(report.includes('Name:') && report.includes('Red flags found'));
   assert.equal(defang('http://a.b.co'), 'hxxp://a[.]b[.]co');
 });
+
+test('Gemini: falls back to an available Flash model and reads screenshots', async () => {
+  const http = await import('node:http');
+  const calls = [];
+  const srv = http.createServer((req, res) => {
+    let body = '';
+    req.on('data', (c) => { body += c; });
+    req.on('end', () => {
+      calls.push(req.url);
+      const send = (code, obj) => { res.writeHead(code, { 'content-type': 'application/json' }); res.end(JSON.stringify(obj)); };
+      if (req.url.startsWith('/v1beta/models?')) {
+        return send(200, { models: [
+          { name: 'models/gemini-9.9-flash-image', supportedGenerationMethods: ['generateContent'] },
+          { name: 'models/gemini-9.0-flash', supportedGenerationMethods: ['generateContent'] },
+        ] });
+      }
+      if (req.url.includes('gemini-9.0-flash:generateContent')) {
+        const parts = JSON.parse(body).contents[0].parts;
+        assert.ok(parts.some((p) => p.inline_data), 'image is sent inline');
+        return send(200, { candidates: [{ content: { parts: [{ text: JSON.stringify({
+          risk_score: 90, verdict: 'scam', summary: 'Fake share.', good_signs: [], actions: [],
+          red_flags: [{ quote: '1googIe.com', category: 'lookalike_domain', severity: 'high', why: 'Not Google.' }],
+          extracted_text: 'Maya Chen (via Google Docs)\n<drive-shares-dm-noreply@1googIe.com>\nOpen',
+        }) }] } }] });
+      }
+      send(404, { error: { code: 404, message: 'model not found' } });
+    });
+  });
+  await new Promise((r) => srv.listen(0, r));
+  const saved = { ...process.env };
+  try {
+    delete process.env.ANTHROPIC_API_KEY; delete process.env.OPENAI_API_KEY;
+    process.env.GEMINI_API_KEY = 'test';
+    process.env.GEMINI_BASE_URL = `http://localhost:${srv.address().port}/v1beta`;
+    const r = await analyzeMessage({ image: { mediaType: 'image/jpeg', data: 'AAAA' } });
+    assert.equal(r.verdict, 'scam');
+    assert.equal(r.engine.ai.provider, 'Gemini');
+    assert.equal(r.engine.ai.model, 'gemini-9.0-flash');
+    assert.ok(r.text.includes('1googIe.com'));
+    assert.ok(calls.some((u) => u.startsWith('/v1beta/models?')), 'looked up available models');
+  } finally {
+    for (const k of ['GEMINI_API_KEY', 'GEMINI_BASE_URL']) delete process.env[k];
+    Object.assign(process.env, saved);
+    srv.close();
+  }
+});

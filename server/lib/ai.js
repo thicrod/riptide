@@ -1,4 +1,4 @@
-// Layer 2: AI analysis. Works with Claude (Anthropic) or OpenAI — whichever key is set.
+// Layer 2: AI analysis. Works with Claude (Anthropic), OpenAI or Google Gemini — whichever key is set.
 // Plain fetch() calls, so there are no SDK dependencies to install.
 
 import { FLAG_CATEGORY_KEYS, PEPPERDINE } from '../../shared/categories.js';
@@ -10,7 +10,87 @@ export function aiInfo() {
   if (process.env.OPENAI_API_KEY) {
     return { provider: 'openai', label: 'OpenAI', model: process.env.OPENAI_MODEL || 'gpt-4o-mini' };
   }
+  if (geminiKey()) {
+    return { provider: 'gemini', label: 'Gemini', model: geminiWorkingModel || process.env.GEMINI_MODEL || 'gemini-flash-latest' };
+  }
   return null;
+}
+
+// ---------- Google Gemini (has a free tier: key from aistudio.google.com, no card) ----------
+const geminiKey = () => process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY;
+const GEMINI_BASE = () => process.env.GEMINI_BASE_URL || 'https://generativelanguage.googleapis.com/v1beta';
+let geminiWorkingModel = null; // remembered after the first successful call
+
+// Google renames models often, so if the configured one is missing (or has no free quota),
+// ask the API which Flash models this key can use and try those.
+async function listGeminiFlashModels() {
+  const res = await fetch(`${GEMINI_BASE()}/models?pageSize=200`, {
+    headers: { 'x-goog-api-key': geminiKey() },
+    signal: AbortSignal.timeout(15000),
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data?.error?.message || `Gemini API error ${res.status}`);
+  const version = (n) => Number((n.match(/gemini-(\d+(?:\.\d+)?)/) || [])[1] || 0);
+  return (data.models || [])
+    .filter((m) => (m.supportedGenerationMethods || []).includes('generateContent'))
+    .map((m) => m.name.replace(/^models\//, ''))
+    .filter((n) => /^gemini-.*flash/.test(n) && !/image|tts|audio|live|embed|exp|preview|thinking|8b/.test(n))
+    .sort((a, b) => Number(/lite/.test(a)) - Number(/lite/.test(b)) || version(b) - version(a));
+}
+
+async function geminiGenerate(model, { userText, image }) {
+  const parts = [];
+  if (image) parts.push({ inline_data: { mime_type: image.mediaType, data: image.data } });
+  parts.push({ text: userText });
+  const res = await fetch(`${GEMINI_BASE()}/models/${encodeURIComponent(model)}:generateContent`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json', 'x-goog-api-key': geminiKey() },
+    body: JSON.stringify({
+      system_instruction: { parts: [{ text: SYSTEM_PROMPT }] },
+      contents: [{ role: 'user', parts }],
+      // Generous limit: newer Gemini models "think" first, and that counts toward the output budget.
+      generationConfig: { responseMimeType: 'application/json', temperature: 0.2, maxOutputTokens: 8192 },
+    }),
+    signal: AbortSignal.timeout(image ? 50000 : 35000),
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    const err = new Error(data?.error?.message || `Gemini API error ${res.status}`);
+    err.status = res.status;
+    throw err;
+  }
+  const text = (data.candidates?.[0]?.content?.parts || []).filter((p) => !p.thought && p.text).map((p) => p.text).join('');
+  if (!text) {
+    const err = new Error(`Gemini returned no answer (${data.candidates?.[0]?.finishReason || data.promptFeedback?.blockReason || 'empty'})`);
+    err.status = 422;
+    throw err;
+  }
+  return text;
+}
+
+async function callGemini({ userText, image }) {
+  const first = geminiWorkingModel || process.env.GEMINI_MODEL || 'gemini-flash-latest';
+  try {
+    const out = await geminiGenerate(first, { userText, image });
+    geminiWorkingModel = first;
+    return out;
+  } catch (err) {
+    // 400/403 with a bad key won't be fixed by another model; missing model (404) or no quota (429) might.
+    if (![404, 429, 400].includes(err.status) || /api key/i.test(err.message)) throw err;
+    const candidates = (await listGeminiFlashModels()).filter((m) => m !== first).slice(0, 3);
+    let last = err;
+    for (const m of candidates) {
+      try {
+        const out = await geminiGenerate(m, { userText, image });
+        geminiWorkingModel = m;
+        console.log(`[ai] Gemini model "${first}" unavailable; using "${m}".`);
+        return out;
+      } catch (e) {
+        last = e;
+      }
+    }
+    throw last;
+  }
 }
 
 const SYSTEM_PROMPT = `You are Riptide, a calm, precise phishing and scam analyst for the Pepperdine University community (students, faculty, staff).
@@ -128,7 +208,7 @@ export async function runAI({ text, image, hints }) {
   const info = aiInfo();
   if (!info) return null;
   const userText = buildUserText({ text, image, hints });
-  const call = info.provider === 'anthropic' ? callAnthropic : callOpenAI;
+  const call = { anthropic: callAnthropic, openai: callOpenAI, gemini: callGemini }[info.provider];
   const raw = await call({ model: info.model, userText, image });
   return parseAIJson(raw);
 }

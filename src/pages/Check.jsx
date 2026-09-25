@@ -193,7 +193,10 @@ export default function Check({ health }) {
                   </button>
                 )}
                 <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={(e) => onFile(e.target.files?.[0])} />
-                <p className="mt-2 text-xs text-slate-500">Screenshots are sent to the AI provider as-is. Crop out anything personal first.</p>
+                <p className="mt-2 text-xs text-slate-500">
+                  Screenshots are sent to the AI provider as-is. Crop out anything personal first.
+                  {health?.ai?.provider === 'Gemini' && ' This demo uses Google Gemini\'s free tier, where Google may use what\'s sent to improve its models.'}
+                </p>
               </div>
             )}
 
