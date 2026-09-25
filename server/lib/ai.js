@@ -51,7 +51,7 @@ async function geminiGenerate(model, { userText, image }) {
       // Generous limit: newer Gemini models "think" first, and that counts toward the output budget.
       generationConfig: { responseMimeType: 'application/json', temperature: 0.2, maxOutputTokens: 8192 },
     }),
-    signal: AbortSignal.timeout(image ? 30000 : 20000), // short, so a stuck model can be swapped out
+    signal: AbortSignal.timeout(image ? 22000 : 15000), // short, so a stuck model can be swapped out
   });
   const data = await res.json().catch(() => ({}));
   if (!res.ok) {
@@ -75,32 +75,42 @@ async function callGemini({ userText, image }) {
   const first = geminiWorkingModel || process.env.GEMINI_MODEL || 'gemini-flash-latest';
   const queue = [first];
   const tried = new Set();
+  const trail = [];
+  const started = Date.now();
   let listed = false;
   let last;
-  // Up to 5 attempts: if a model is busy ("high demand"), missing, or has no free quota,
-  // switch to another Flash model this key can use (lighter "lite" models are tried last).
-  for (let attempt = 0; attempt < 5 && queue.length; attempt++) {
+  // If a model is busy ("high demand"), slow, missing, or has no free quota, switch to another
+  // Flash model this key can use. Lighter "lite" models go first after a failure: they're faster
+  // and less crowded. Stop trying after ~50s so the page never hangs.
+  while (queue.length && tried.size < 5 && Date.now() - started < 50000) {
     const model = queue.shift();
     if (tried.has(model)) continue;
     tried.add(model);
     try {
       const out = await geminiGenerate(model, { userText, image });
-      if (model !== first) console.log(`[ai] Gemini model "${first}" unavailable; used "${model}".`);
+      if (model !== first) console.log(`[ai] Gemini: ${trail.join('; ')}; used "${model}".`);
       geminiWorkingModel = model;
       return out;
     } catch (err) {
       last = err;
-      const switchable = RETRYABLE.has(err.status) || [400, 404, 422].includes(err.status);
+      const timedOut = err.name === 'TimeoutError' || err.name === 'AbortError';
+      trail.push(`${model}: ${timedOut ? 'too slow' : (err.status || '') + ' ' + err.message.slice(0, 80)}`);
+      const switchable = timedOut || RETRYABLE.has(err.status) || [400, 404, 422].includes(err.status);
       if (!switchable || /api key/i.test(err.message)) throw err; // a bad key won't be fixed by another model
       if (geminiWorkingModel === model) geminiWorkingModel = null;
       if (!listed) {
         listed = true;
-        try { queue.push(...(await listGeminiFlashModels()).filter((m) => !tried.has(m))); } catch { /* keep the error we have */ }
+        try {
+          const models = (await listGeminiFlashModels()).filter((m) => !tried.has(m));
+          queue.push(...models.filter((m) => /lite/.test(m)), ...models.filter((m) => !/lite/.test(m)));
+        } catch { /* keep the error we have */ }
       }
-      if (RETRYABLE.has(err.status)) await sleep(600);
+      if (RETRYABLE.has(err.status)) await sleep(500);
     }
   }
-  throw last;
+  const err = new Error(`Gemini is busy right now (${trail.join('; ')})`);
+  err.status = last?.status;
+  throw err;
 }
 
 const SYSTEM_PROMPT = `You are Riptide, a calm, precise phishing and scam analyst for the Pepperdine University community (students, faculty, staff).
