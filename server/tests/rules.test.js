@@ -269,7 +269,7 @@ test('ISO report is filled in and links are defanged', () => {
   assert.equal(defang('http://a.b.co'), 'hxxp://a[.]b[.]co');
 });
 
-test('Gemini: falls back to an available Flash model and reads screenshots', async () => {
+test('Gemini: when a model is overloaded it switches to another Flash model and reads screenshots', async () => {
   const http = await import('node:http');
   const calls = [];
   const srv = http.createServer((req, res) => {
@@ -293,6 +293,7 @@ test('Gemini: falls back to an available Flash model and reads screenshots', asy
           extracted_text: 'Maya Chen (via Google Docs)\n<drive-shares-dm-noreply@1googIe.com>\nOpen',
         }) }] } }] });
       }
+      if (req.url.includes('gemini-flash-latest')) return send(503, { error: { code: 503, message: 'This model is currently experiencing high demand.' } });
       send(404, { error: { code: 404, message: 'model not found' } });
     });
   });

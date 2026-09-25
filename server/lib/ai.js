@@ -51,7 +51,7 @@ async function geminiGenerate(model, { userText, image }) {
       // Generous limit: newer Gemini models "think" first, and that counts toward the output budget.
       generationConfig: { responseMimeType: 'application/json', temperature: 0.2, maxOutputTokens: 8192 },
     }),
-    signal: AbortSignal.timeout(image ? 50000 : 35000),
+    signal: AbortSignal.timeout(image ? 30000 : 20000), // short, so a stuck model can be swapped out
   });
   const data = await res.json().catch(() => ({}));
   if (!res.ok) {
@@ -68,29 +68,39 @@ async function geminiGenerate(model, { userText, image }) {
   return text;
 }
 
+const RETRYABLE = new Set([429, 500, 502, 503, 504]); // overloaded, rate-limited or a temporary server error
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
 async function callGemini({ userText, image }) {
   const first = geminiWorkingModel || process.env.GEMINI_MODEL || 'gemini-flash-latest';
-  try {
-    const out = await geminiGenerate(first, { userText, image });
-    geminiWorkingModel = first;
-    return out;
-  } catch (err) {
-    // 400/403 with a bad key won't be fixed by another model; missing model (404) or no quota (429) might.
-    if (![404, 429, 400].includes(err.status) || /api key/i.test(err.message)) throw err;
-    const candidates = (await listGeminiFlashModels()).filter((m) => m !== first).slice(0, 3);
-    let last = err;
-    for (const m of candidates) {
-      try {
-        const out = await geminiGenerate(m, { userText, image });
-        geminiWorkingModel = m;
-        console.log(`[ai] Gemini model "${first}" unavailable; using "${m}".`);
-        return out;
-      } catch (e) {
-        last = e;
+  const queue = [first];
+  const tried = new Set();
+  let listed = false;
+  let last;
+  // Up to 5 attempts: if a model is busy ("high demand"), missing, or has no free quota,
+  // switch to another Flash model this key can use (lighter "lite" models are tried last).
+  for (let attempt = 0; attempt < 5 && queue.length; attempt++) {
+    const model = queue.shift();
+    if (tried.has(model)) continue;
+    tried.add(model);
+    try {
+      const out = await geminiGenerate(model, { userText, image });
+      if (model !== first) console.log(`[ai] Gemini model "${first}" unavailable; used "${model}".`);
+      geminiWorkingModel = model;
+      return out;
+    } catch (err) {
+      last = err;
+      const switchable = RETRYABLE.has(err.status) || [400, 404, 422].includes(err.status);
+      if (!switchable || /api key/i.test(err.message)) throw err; // a bad key won't be fixed by another model
+      if (geminiWorkingModel === model) geminiWorkingModel = null;
+      if (!listed) {
+        listed = true;
+        try { queue.push(...(await listGeminiFlashModels()).filter((m) => !tried.has(m))); } catch { /* keep the error we have */ }
       }
+      if (RETRYABLE.has(err.status)) await sleep(600);
     }
-    throw last;
   }
+  throw last;
 }
 
 const SYSTEM_PROMPT = `You are Riptide, a calm, precise phishing and scam analyst for the Pepperdine University community (students, faculty, staff).
