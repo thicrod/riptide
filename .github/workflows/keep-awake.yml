@@ -1,17 +1,27 @@
-# Keeps the free Render server awake during demo week, so nobody waits ~50s for it to wake up.
-# Render's free plan sleeps after 15 minutes without visitors; a request every few minutes prevents that.
-# Runs Sept 24-26 (UTC) only, to stay well inside GitHub's free Actions minutes. Delete this file to stop it.
+# Keeps the free Render server awake for the demo (Fri Sept 25, 3 PM PT) and awards (Sat Sept 26, 2:30 PM PT),
+# so nobody waits ~50s for it to wake up. Render's free plan sleeps after 15 minutes without visitors.
+# GitHub often delays or skips frequent scheduled runs, so each run stays on for up to 6 hours and pings
+# every 5 minutes. Start it by hand anytime: Actions -> Keep Riptide awake -> Run workflow. Delete this file to stop it.
 name: Keep Riptide awake
 
 on:
-  schedule:
-    - cron: '*/6 * 24-26 9 *'
   workflow_dispatch:
+  schedule:
+    # Saturday Sept 26, 8 AM and 10 AM PT (15:00 and 17:00 UTC). A backup in case the first is skipped.
+    - cron: '0 15,17 26 9 *'
+
+concurrency:
+  group: keep-awake
+  cancel-in-progress: false
 
 jobs:
   ping:
     runs-on: ubuntu-latest
-    timeout-minutes: 3
+    timeout-minutes: 360
     steps:
-      - name: Ping the health check (retries while it wakes up)
-        run: curl -fsS --retry 6 --retry-delay 15 --retry-all-errors --max-time 90 https://riptide-i0pk.onrender.com/api/health
+      - name: Ping every 5 minutes for 6 hours
+        run: |
+          for i in $(seq 1 71); do
+            curl -sS -o /dev/null -w "%{http_code} $(date -u +%H:%M)\n" --retry 6 --retry-delay 15 --retry-all-errors --max-time 90 https://riptide-i0pk.onrender.com/api/health || true
+            sleep 300
+          done
